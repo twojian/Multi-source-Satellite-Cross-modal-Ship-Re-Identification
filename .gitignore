@@ -26,6 +26,9 @@ logs/
 .DS_Store
 Thumbs.db
 
+# 数据集（不上传，由赛题方提供）
+赛题6-初赛/
+
 # 数据标注（由 ensure_dummy_data 自动生成）
 ship_reid_system/data/annotations/train.json
 ship_reid_system/data/annotations/val.json
