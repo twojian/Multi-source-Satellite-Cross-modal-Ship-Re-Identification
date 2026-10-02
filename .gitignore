@@ -32,3 +32,6 @@ Thumbs.db
 # 数据标注（由 ensure_dummy_data 自动生成）
 ship_reid_system/data/annotations/train.json
 ship_reid_system/data/annotations/val.json
+
+# 推理产物
+prediction.json
