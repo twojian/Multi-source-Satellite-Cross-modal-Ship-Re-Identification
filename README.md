@@ -99,6 +99,8 @@ pip install -r requirements.txt
         └── task.json
 ```
 
+> 当前 `config/default.yaml` 与 `config/train_gpu.yaml` 均已指向真实数据路径（`../赛题6-初赛/训练数据`、`../赛题6-初赛/初赛测试数据`），CSV 模式优先；`train_ann` / `val_ann` 留空，仅在切换 JSON 标注模式时填写。
+
 ## 4. 快速开始
 
 ### 4.1 一键全流程
