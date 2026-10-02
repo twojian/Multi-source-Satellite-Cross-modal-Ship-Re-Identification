@@ -48,12 +48,13 @@ ship_reid_system/
 ├── outputs/                 # 训练产物（自动创建）
 │   ├── logs/                # tensorboard
 │   └── checkpoints/         # last.pth / best.pth
-├── setup.bat / setup_env.ps1  # 一键环境安装（CUDA 12.4）
-├── train.bat                # GPU 训练
-├── inference.bat            # 生成提交 prediction.json
-├── local_val.bat            # 本地验证集预测 + 评分
-├── pseudo_label.bat         # 伪标签自训练
-├── run_all.bat              # 一键全流程
+├── 01_setup.bat / setup_env.ps1  # 一键环境安装（CUDA 12.4）
+├── 02_train.bat                # GPU 训练
+├── 03_local_val.bat            # 本地验证集预测 + 评分
+├── 04_inference.bat            # 生成提交 prediction.json
+├── 05_pseudo_label.bat         # 伪标签自训练
+├── 06_run_all.bat              # 一键全流程
+├── 07_transoss_pipeline.bat    # TransOSS 全流程
 ├── requirements.txt
 ├── train.py / inference.py / evaluate.py
 └── README.md
@@ -61,7 +62,7 @@ ship_reid_system/
 
 ## 2. 环境安装
 
-**推荐（Windows GPU 一键安装）**：双击 `setup.bat`，或执行：
+**推荐（Windows GPU 一键安装）**：双击 `01_setup.bat`，或执行：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup_env.ps1
@@ -105,17 +106,19 @@ pip install -r requirements.txt
 
 ### 4.1 一键全流程
 
-双击 `run_all.bat`：生成本地验证集 → GPU 训练 → 本地验证评测 → 生成提交文件。
+双击 `06_run_all.bat`：生成本地验证集 → GPU 训练 → 本地验证评测 → 生成提交文件。
 
 ### 4.2 分步执行
 
 | 步骤 | 脚本 | 说明 |
 |---|---|---|
-| 环境安装 | `setup.bat` | 安装 CUDA 12.4 环境 |
-| 训练 | `train.bat` | GPU 训练（EMA + AMP + Warmup） |
-| 本地验证 | `local_val.bat` | 本地验证集预测 + 评分 |
-| 生成提交 | `inference.bat` | 生成 `prediction.json`（TTA+重排序+QE+聚类） |
-| 伪标签自训练 | `pseudo_label.bat` | gallery 伪标签 → 扩展训练 → 重训 |
+| 环境安装 | `01_setup.bat` | 安装 CUDA 12.4 环境 |
+| 训练 | `02_train.bat` | GPU 训练（EMA + AMP + Warmup） |
+| 本地验证 | `03_local_val.bat` | 本地验证集预测 + 评分 |
+| 生成提交 | `04_inference.bat` | 生成 `prediction.json`（TTA+重排序+QE+聚类） |
+| 伪标签自训练 | `05_pseudo_label.bat` | gallery 伪标签 → 扩展训练 → 重训 |
+| 一键全流程 | `06_run_all.bat` | 构建验证集 → 训练 → 评测 → 提交 |
+| TransOSS 全流程 | `07_transoss_pipeline.bat` | 数据转换 → 微调 → 推理 → 提交 |
 
 ## 5. 核心功能
 
@@ -308,7 +311,7 @@ python transoss_inference.py \
 
 ### 8.6 一键脚本
 
-双击 `transoss_pipeline.bat` 按提示完成数据转换 → 微调 → 推理全流程。
+双击 `07_transoss_pipeline.bat` 按提示完成数据转换 → 微调 → 推理全流程。
 
 ## 9. 常见问题
 
