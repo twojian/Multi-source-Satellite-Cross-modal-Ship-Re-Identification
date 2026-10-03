@@ -57,6 +57,7 @@ ship_reid_system/
 ├── 06_run_all.bat              # 一键全流程
 ├── 07_transoss_pipeline.bat    # TransOSS 微调+推理全流程（自动）
 ├── 08_transoss_setup.bat       # TransOSS 环境一键准备（克隆/依赖/数据/占位目录/配置/权重检查）
+├── 09_local_val_transoss.bat   # TransOSS 本地验证一键（备份/划分20%验证集/推理/评测）
 ├── requirements.txt
 ├── train.py / inference.py / evaluate.py
 └── README.md
