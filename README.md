@@ -42,7 +42,8 @@ ship_reid_system/
 │   ├── compute_stats.py     # 计算训练集各模态 mean/std
 │   ├── pseudo_label.py      # 伪标签自训练
 │   ├── transoss_prepare_data.py  # 训练数据→TransOSS bounding_box_train 格式
-│   └── transoss_inference.py     # TransOSS 推理 + 后处理 + 提交（在 Hoss-ReID 内运行）
+│   ├── transoss_inference.py     # TransOSS 推理 + 后处理 + 提交（在 Hoss-ReID 内运行）
+│   └── transoss_setup.py         # TransOSS 一键准备（克隆仓库/依赖/数据/占位目录/配置/权重检查）
 ├── transoss_config/
 │   └── hoss_transoss_competition.yml  # TransOSS 微调配置（指向赛题数据）
 ├── outputs/                 # 训练产物（自动创建）
@@ -54,7 +55,8 @@ ship_reid_system/
 ├── 04_inference.bat            # 生成提交 prediction.json
 ├── 05_pseudo_label.bat         # 伪标签自训练
 ├── 06_run_all.bat              # 一键全流程
-├── 07_transoss_pipeline.bat    # TransOSS 全流程
+├── 07_transoss_pipeline.bat    # TransOSS 微调+推理全流程（自动）
+├── 08_transoss_setup.bat       # TransOSS 环境一键准备（克隆/依赖/数据/占位目录/配置/权重检查）
 ├── requirements.txt
 ├── train.py / inference.py / evaluate.py
 └── README.md
@@ -80,6 +82,7 @@ pip install -r requirements.txt
 ```
 
 - 驱动建议 ≥ 551.x（CUDA 12.4）
+- `requirements.txt` 已含 TransOSS 依赖 `einops`、`yacs`；`08_transoss_setup.bat` 也会幂等补装
 - CPU 兜底：`pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu`
 
 ## 3. 数据放置约定
@@ -118,7 +121,8 @@ pip install -r requirements.txt
 | 生成提交 | `04_inference.bat` | 生成 `prediction.json`（TTA+重排序+QE+聚类） |
 | 伪标签自训练 | `05_pseudo_label.bat` | gallery 伪标签 → 扩展训练 → 重训 |
 | 一键全流程 | `06_run_all.bat` | 构建验证集 → 训练 → 评测 → 提交 |
-| TransOSS 全流程 | `07_transoss_pipeline.bat` | 数据转换 → 微调 → 推理 → 提交 |
+| TransOSS 环境准备 | `08_transoss_setup.bat` | 克隆 Hoss-ReID、装依赖、数据转换、建占位目录、生成配置、检查权重 |
+| TransOSS 全流程 | `07_transoss_pipeline.bat` | 数据转换 → 微调（自动）→ 推理 → 提交 |
 
 ## 5. 核心功能
 
@@ -263,55 +267,56 @@ python train.py --config config/train_gpu.yaml \
 
 TransOSS 是该赛题同源数据集 HOSS ReID 的官方基线，已在大规模光学-SAR 图像对上做过对比预训练，跨模态对齐能力远强于通用预训练。
 
-### 8.1 克隆仓库
+### 8.1 一键准备（推荐）
+
+双击 `08_transoss_setup.bat`（或 `python scripts/transoss_setup.py`），自动完成：
+- 克隆 `Hoss-ReID` 到 `ship_reid_system/Hoss-ReID`（已存在则跳过）
+- 幂等安装 TransOSS 额外依赖 `einops`、`yacs`
+- 赛题训练数据 → `bounding_box_train` 格式转换
+- 创建评估占位目录 `query/`、`bounding_box_test/`，避免训练 `EVAL_PERIOD` 阶段崩溃
+- 生成 `configs/hoss_transoss_competition.yml`（`ROOT_DIR` 自动替换为机器绝对路径）
+- 复制推理脚本并检查预训练权重是否就位
+
+### 8.2 预训练权重
+
+从 [HuggingFace](https://huggingface.co/Alioth2000/TransOSS/tree/main) 下载 `vit_b512_pre.pth`，放到 `Hoss-ReID/weights/`。`08` 脚本会在缺失时提示。
+
+### 8.3 一键微调 + 推理（推荐）
+
+双击 `07_transoss_pipeline.bat`，自动执行：数据转换（幂等）→ 微调 200 epochs → 推理生成 `prediction_transoss.json`。
+
+### 8.4 手动执行（可选）
 
 ```bash
-# 在本项目根目录同级克隆
-git clone https://github.com/Alioth2000/Hoss-ReID.git
-```
-
-### 8.2 下载预训练权重
-
-从 [HuggingFace](https://huggingface.co/Alioth2000/TransOSS/tree/main) 下载 `vit_b512_pre.pth`，放到 `Hoss-ReID/weights/`。
-
-### 8.3 数据转换
-
-将赛题训练数据转为 TransOSS 的 `bounding_box_train` 格式：
-
-```bash
-# 在 ship_reid_system/ 目录执行
+# 数据转换
 python scripts/transoss_prepare_data.py \
     --csv "../赛题6-初赛/训练数据/labels_train.csv" \
     --out_dir "../transoss_data/HOSS/bounding_box_train"
-```
 
-### 8.4 配置与微调
-
-将 `transoss_config/hoss_transoss_competition.yml` 复制到 `Hoss-ReID/configs/`，然后：
-
-```bash
+# 微调
 cd Hoss-ReID
 python train.py --config_file configs/hoss_transoss_competition.yml
-```
 
-### 8.5 推理 + 后处理 + 提交
-
-将 `scripts/transoss_inference.py` 复制到 `Hoss-ReID/` 根目录，执行：
-
-```bash
+# 推理
 python transoss_inference.py \
     --config_file configs/hoss_transoss_competition.yml \
     --weight logs/competition_transoss/transformer_200.pth \
     --task_json "../赛题6-初赛/初赛测试数据/task.json" \
-    --out_prediction ../prediction_transoss.json \
-    --tta --rerank --qe --cluster
+    --out_prediction ../prediction_transoss.json
 ```
 
-后处理（TTA/k-reciprocal/QE/Gallery聚类）与自研框架完全一致，可在同一份本地验证集上公平对比两路增益。
+### 8.5 后处理与评估说明
+
+- 推理脚本**默认关闭后处理**（直接余弦相似度检索）。如需叠加，加 `--tta --rerank --qe --cluster`；后处理参数建议先在自研路线的本地验证集上调优，再平移到 TransOSS。
+- 后处理按候选模态分组执行，并排除 query 自身（修复 O2O 方向 R@1 偏低与跨模态污染问题）。
+- **训练内置评估不可信**：评估集为占位数据、与训练集身份重叠，mAP/R@1 虚高。以测试集推理 + 本地验证（`evaluate.py --submission`）为准。
 
 ### 8.6 一键脚本
 
-双击 `07_transoss_pipeline.bat` 按提示完成数据转换 → 微调 → 推理全流程。
+| 脚本 | 作用 |
+|---|---|
+| `08_transoss_setup.bat` | 环境一键准备（克隆/依赖/数据/占位目录/配置/权重检查） |
+| `07_transoss_pipeline.bat` | 微调 + 推理全流程（自动） |
 
 ## 9. 常见问题
 
@@ -324,3 +329,5 @@ python transoss_inference.py \
 | EMA 权重缺失 | 旧 checkpoint 无 `ema_state`，自动回退普通权重 |
 | 聚类无效果 | 调整 `eps`（postprocess.py 中，默认 0.5） |
 | TransOSS 权重加载失败 | 确认 `PRETRAIN_PATH` 指向 `vit_b512_pre.pth`，且 `TRANSFORMER_TYPE: 'vit_base_patch16_224_TransOSS'` |
+| TransOSS 训练在 EVAL_PERIOD 阶段报空张量错误 | 先运行 `08` 脚本创建 `query/`、`bounding_box_test/` 占位目录 |
+| TransOSS 训练内置评估 mAP 虚高 | 评估用占位数据、身份与训练集重叠，数字不可信，以测试集推理 + 本地验证为准 |
