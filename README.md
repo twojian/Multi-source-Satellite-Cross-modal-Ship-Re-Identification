@@ -311,12 +311,30 @@ python transoss_inference.py \
 - 后处理按候选模态分组执行，并排除 query 自身（修复 O2O 方向 R@1 偏低与跨模态污染问题）。
 - **训练内置评估不可信**：评估集为占位数据、与训练集身份重叠，mAP/R@1 虚高。以测试集推理 + 本地验证（`evaluate.py --submission`）为准。
 
-### 8.6 一键脚本
+### 8.6 本地验证（一键）
+
+双击 `09_local_val_transoss.bat`，一键完成 TransOSS 本地验证：
+
+1. 备份 `labels_train.csv` → `labels_train.backup.csv`（首次运行自动执行，已有备份则跳过）
+2. `build_local_val.py` 从全量标签划分 20% 身份作为验证集，生成 `local_val_task.json` / `local_val_gt.json`，并重写 `labels_train.csv` 为 80% 身份子集
+3. `transoss_inference.py` 在 Hoss-ReID 仓库内对验证集推理（默认无后处理）
+4. `evaluate.py --submission` 输出 O2S / S2O / O2O 与综合得分，可对照自研基线（无后处理综合 0.1162）
+
+**运行前提**：已跑通 `08_transoss_setup.bat`（环境准备）与 `07_transoss_pipeline.bat`（训练权重 `logs/competition_transoss/transformer_200.pth`），且赛题数据 `labels.csv` 已同步到 `../赛题6-初赛/训练数据/`。
+
+**使用方式**：在目标机（16GB 显存、已跑通 07 的机器）双击运行，全程自动，结果自动与自研基线对比。
+
+**注意事项**：
+- 脚本会重新划分验证集并重写 `labels_train.csv`，首次运行前自动备份至 `labels_train.backup.csv`，请勿手动删除备份
+- 默认**无后处理**（直接余弦相似度检索）；如需重测后处理增益，在脚本第 3 步推理命令追加 `--tta --rerank --qe --cluster` 后重跑
+
+### 8.7 一键脚本
 
 | 脚本 | 作用 |
 |---|---|
 | `08_transoss_setup.bat` | 环境一键准备（克隆/依赖/数据/占位目录/配置/权重检查） |
 | `07_transoss_pipeline.bat` | 微调 + 推理全流程（自动） |
+| `09_local_val_transoss.bat` | 本地验证（备份/划分 20% 验证集/推理/评测） |
 
 ## 9. 常见问题
 
