@@ -123,6 +123,7 @@ pip install -r requirements.txt
 | 一键全流程 | `06_run_all.bat` | 构建验证集 → 训练 → 评测 → 提交 |
 | TransOSS 环境准备 | `08_transoss_setup.bat` | 克隆 Hoss-ReID、装依赖、数据转换、建占位目录、生成配置、检查权重 |
 | TransOSS 全流程 | `07_transoss_pipeline.bat` | 数据转换 → 微调（自动）→ 推理 → 提交 |
+| TransOSS 本地验证 | `09_local_val_transoss.bat` | 备份/划分 20% 验证集/推理/评测 |
 
 ## 5. 核心功能
 
