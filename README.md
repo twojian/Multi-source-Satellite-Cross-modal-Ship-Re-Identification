@@ -1,14 +1,3 @@
----
-AIGC:
-    Label: "1"
-    ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: a88da0184087caa3b0b1fbad5b044954_f2be7db4bfa011f197eb525400393706
-    ReservedCode1: DmGlx1Dd2pcK/Uuo/j+dDCSC3B8YDFNgWmwbv35Xt/+NQFchItWIngR156jxi+N5ctma/a+UC9MY39du1ZUjgB9igCYtAWPD/GeV+ONzsdYK5op3x/tL1x8I1VEkT5B84k8GsVNdgZzJBF55DM0A6sOuAxdtO4A3pElCQE/9zRyIUdBcdJEg9hT23K0=
-    ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: a88da0184087caa3b0b1fbad5b044954_f2be7db4bfa011f197eb525400393706
-    ReservedCode2: DmGlx1Dd2pcK/Uuo/j+dDCSC3B8YDFNgWmwbv35Xt/+NQFchItWIngR156jxi+N5ctma/a+UC9MY39du1ZUjgB9igCYtAWPD/GeV+ONzsdYK5op3x/tL1x8I1VEkT5B84k8GsVNdgZzJBF55DM0A6sOuAxdtO4A3pElCQE/9zRyIUdBcdJEg9hT23K0=
----
-
 # 赛题06 多源卫星跨模态舰船重识别 · 代码系统框架
 
 面向 **2026 全国大数据与计算智能挑战赛 赛题06「多源卫星跨模态舰船重识别」** 的可运行工程化代码框架。
@@ -454,4 +443,4 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 | TransOSS 权重加载失败 | 确认 `PRETRAIN_PATH` 指向 `vit_b512_pre.pth`，且 `TRANSFORMER_TYPE: 'vit_base_patch16_224_TransOSS'` |
 | TransOSS 训练在 EVAL_PERIOD 阶段报空张量错误 | 先运行 `08` 脚本创建 `query/`、`bounding_box_test/` 占位目录 |
 | TransOSS 训练内置评估 mAP 虚高 | 评估用占位数据、身份与训练集重叠，数字不可信，以测试集推理 + 本地验证为准 |
-*（内容由AI生成，仅供参考）*
+
