@@ -424,6 +424,23 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 2. **达标即提交**：本地验证分数达到目标后，直接对测试集执行推理并提交，不再追加改动。
 3. **不达标再重训（高成本兜底）**：仍不足时，才考虑需要重训的高成本项，如伪标签自训练（1 轮约 3.9 小时）、分辨率微调等；重训**可基于已有 `transformer_*.pth` 续训**，避免从头开始的时间开销。
 
+### 8.12 当前进度（实验闭环阶段）
+
+**阶段定位**：当前处于路线图**阶段 1~3 实验闭环**——以零训练成本增益优先（推理端 SAR 预处理 / TTA / rerank / QE / checkpoint 选优 / RRF），**尚未进入重训阶段**；自研 CrossModal 模型（`w_cm_infonce` / `w_cm_triplet`）仍在关闭状态，后续按路线图第 15 节 ⑧⑨ 再启用。
+
+**已完成结果摘要**（对照 `experiments\` 台账，记录规范见 `experiments\README.md`）：
+
+| 实验 | 结果 | 结论 |
+|---|---|---|
+| TransOSS 全流程 + 测试集提交 | `prediction_transoss.json` 已提交，官方 **Public = 0.5055** | 全流程跑通 |
+| 本地验证 base | 划分1：**0.4881**（O2S 0.4612 / S2O 0.4126 / O2O 0.9490）；划分2：**0.4831**（O2S 0.4637 / S2O 0.3990 / O2O 0.9492） | 两次划分存在批次差异，Δ 不可直接对比（详见 `exp_001`） |
+| 10 checkpoint 选优 | **200 = 0.4831 最优**；RRF(top3) = 0.4835 | RRF 相对最优单点 **Δ≈0.0004，在噪声内、无实质增益**，暂不采用（详见 `exp_002`） |
+| 自研基线对比 | 自研 0.1162 → TransOSS 0.4831 | TransOSS 相对自研提升约 **4.2 倍** |
+
+**待执行**：`11_transoss_ab.bat` 六组合消融（base / preprocess / preprocess+colormap / preprocess+tta / rerankqe / mixed，同一 `local_val_task.json` 横向对比，含 ΔBaseline 汇总表）；跑完将 O2S/S2O/O2O/Overall/ΔBaseline 回填 `experiments\exp_003_sar_preprocess_ab.csv`（模板已就位），据此决定哪些推理端增强纳入最终提交。
+
+**决策原则**：只保留相对 base 综合得分 **增益 > 0.005** 的项；本地验证集是实验裁判、Public 是最终裁判，两者分布不同禁止直接互比 Δ。
+
 ## 9. 常见问题
 
 | 现象 | 排查 |
