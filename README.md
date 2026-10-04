@@ -55,7 +55,7 @@ ship_reid_system/
 │   ├── transoss_prepare_data.py  # 训练数据→TransOSS bounding_box_train 格式
 │   ├── transoss_inference.py     # TransOSS 推理 + 后处理 + 提交（在 Hoss-ReID 内运行）
 │   ├── transoss_checkpoint_fusion.py  # 多 checkpoint 批量验证 + RRF 排名融合
-│   ├── transoss_ablation.py      # 一键消融验证（base/preprocess/rerank+QE/mixed 对比）
+│   ├── transoss_ablation.py      # 一键消融验证（base/preprocess/colormap/tta/rerankqe/mixed 六组合对比，含 ΔBaseline）
 │   └── transoss_setup.py         # TransOSS 一键准备（克隆仓库/依赖/数据/占位目录/配置/权重检查）
 ├── transoss_config/
 │   └── hoss_transoss_competition.yml  # TransOSS 微调配置（指向赛题数据）
@@ -72,10 +72,16 @@ ship_reid_system/
 ├── 08_transoss_setup.bat       # TransOSS 环境一键准备（克隆/依赖/数据/占位目录/配置/权重检查）
 ├── 09_local_val_transoss.bat   # TransOSS 本地验证一键（备份/划分20%验证集/推理/评测）
 ├── 10_transoss_fusion.bat      # 多 checkpoint 选优 + RRF 融合一键
-├── 11_transoss_ab.bat          # 一键消融验证（base/preprocess/rerank+QE/mixed 对比）
+├── 11_transoss_ab.bat          # 一键消融验证（对齐路线图 4.1 七组合矩阵，base 只跑一次）
 ├── requirements.txt
 ├── train.py / inference.py / evaluate.py
 └── README.md
+
+experiments/                  # 实验记录体系（对齐路线图 2.2，统一 CSV 登记 + ΔBaseline）
+├── README.md                 # 记录规范：必记 O2S/S2O/O2O/Overall 与 ΔBaseline、单变量原则、判定标准
+├── exp_001_transoss_base.csv # TransOSS baseline（两次划分 + Public，注明划分批次差异）
+├── exp_002_ckpt_fusion.csv   # 10 checkpoint 评测表 + RRF(top3) 结论（无实质增益）
+└── exp_003_sar_preprocess_ab.csv  # 11 脚本六组合消融（base/preprocess/colormap/tta/rerankqe/mixed，待 11 跑完填写）
 ```
 
 ## 2. 环境安装
@@ -383,7 +389,7 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 
 ### 8.9 一键消融验证（11_transoss_ab.bat）
 
-**用途**：优化节奏第 1 步需要同时验证 SAR 预处理、rerank/QE 与两者混合是否带来正增益。`11_transoss_ab.bat` 基于**同一份** `local_val_task.json` 依次跑 4 个组合并评测，保证横向可比：1) `base`（无增强，baseline 参照）；2) `preprocess`（`--preprocess`，SAR 去斑 + CLAHE）；3) `rerankqe`（`--rerank --qe`）；4) `mixed`（`--preprocess --rerank --qe`）。
+**用途**：对齐路线图 4.1/7.1/7.2 的实验矩阵，一次性验证 SAR 预处理、排序后处理与两者混合是否带来正增益。`11_transoss_ab.bat` 基于**同一份** `local_val_task.json` 依次跑 6 个组合（base 只跑一次）并评测，保证横向可比：1) `base`（无增强，baseline 参照）；2) `preprocess`（`--preprocess`，SAR 去斑 + CLAHE）；3) `preprocess_colormap`（`--preprocess --sar_colormap`，SAR 预处理 + JET 伪彩）；4) `preprocess_tta`（`--preprocess --tta`，SAR 预处理 + 水平翻转 TTA）；5) `rerankqe`（`--rerank --qe`，k-reciprocal rerank + QE，k1=20 k2=6 lambda=0.3 固定）；6) `mixed`（`--preprocess --rerank --qe`，预处理 + 排序后处理混合）。
 
 **用法**：双击 `11_transoss_ab.bat`（或直接执行）
 
@@ -394,7 +400,9 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 
 **验证集策略**：脚本先检查 `local_val_task.json` 是否已存在——存在则直接复用（不重新划分，避免覆盖 09 生成的验证集）；不存在才调用 `build_local_val.py` 生成一次（此时会重写 `labels_train.csv` 为 80% 身份子集，首次运行建议先备份为 `labels_train.backup.csv`）。
 
-**流程**：4 个组合按序调用 `transoss_inference.py`（同一权重 `transformer_200.pth`，各自输出独立预测 `pred_ab_base.json` / `pred_ab_preprocess.json` / `pred_ab_rerankqe.json` / `pred_ab_mixed.json`，互不覆盖）→ 每个组合子进程 `evaluate.py --submission` 评测（O2S/S2O/O2O 方向得分与综合得分）→ 末尾打印横向对比汇总表（含相对 baseline 增益）。
+**流程**：6 个组合按序调用 `transoss_inference.py`（同一权重 `transformer_200.pth`，各自输出独立预测 `pred_ab_base.json` / `pred_ab_preprocess.json` / `pred_ab_preprocess_colormap.json` / `pred_ab_preprocess_tta.json` / `pred_ab_rerankqe.json` / `pred_ab_mixed.json`，互不覆盖）→ 每个组合子进程 `evaluate.py --submission` 评测（O2S/S2O/O2O 方向得分与综合得分）→ 末尾打印横向对比汇总表（含 **ΔBaseline** 列，相对 base 综合得分）。
+
+**实验登记**：11 脚本跑完后，将六组合的 O2S/S2O/O2O/Overall/ΔBaseline 回填 `experiments\exp_003_sar_preprocess_ab.csv`（模板已就位）；所有已跑实验统一登记在 `experiments\` 目录（对齐路线图 2.2，见文件树与各 CSV 备注）。
 
 **建议**：只保留汇总表中相对 `base` 为**正增益**的组合项，将正增益项叠加进最终推理配置；负增益项直接弃用。
 
@@ -406,7 +414,7 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 | `07_transoss_pipeline.bat` | 微调 + 推理全流程（自动） |
 | `09_local_val_transoss.bat` | 本地验证（备份/划分 20% 验证集/推理/评测） |
 | `10_transoss_fusion.bat` | 多 checkpoint 选优 + RRF 融合 |
-| `11_transoss_ab.bat` | 一键消融验证（base / preprocess / rerank+QE / mixed 四组合对比） |
+| `11_transoss_ab.bat` | 一键消融验证（对齐路线图 4.1 七组合：base / preprocess / colormap / tta / rerankqe / mixed，含 ΔBaseline 对比） |
 
 ### 8.11 优化节奏建议（零训练成本优先）
 
