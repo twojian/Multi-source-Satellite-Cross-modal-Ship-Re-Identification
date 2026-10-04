@@ -43,6 +43,7 @@ ship_reid_system/
 │   ├── pseudo_label.py      # 伪标签自训练
 │   ├── transoss_prepare_data.py  # 训练数据→TransOSS bounding_box_train 格式
 │   ├── transoss_inference.py     # TransOSS 推理 + 后处理 + 提交（在 Hoss-ReID 内运行）
+│   ├── transoss_checkpoint_fusion.py  # 多 checkpoint 批量验证 + RRF 排名融合
 │   └── transoss_setup.py         # TransOSS 一键准备（克隆仓库/依赖/数据/占位目录/配置/权重检查）
 ├── transoss_config/
 │   └── hoss_transoss_competition.yml  # TransOSS 微调配置（指向赛题数据）
@@ -58,6 +59,7 @@ ship_reid_system/
 ├── 07_transoss_pipeline.bat    # TransOSS 微调+推理全流程（自动）
 ├── 08_transoss_setup.bat       # TransOSS 环境一键准备（克隆/依赖/数据/占位目录/配置/权重检查）
 ├── 09_local_val_transoss.bat   # TransOSS 本地验证一键（备份/划分20%验证集/推理/评测）
+├── 10_transoss_fusion.bat      # 多 checkpoint 选优 + RRF 融合一键
 ├── requirements.txt
 ├── train.py / inference.py / evaluate.py
 └── README.md
@@ -125,6 +127,7 @@ pip install -r requirements.txt
 | TransOSS 环境准备 | `08_transoss_setup.bat` | 克隆 Hoss-ReID、装依赖、数据转换、建占位目录、生成配置、检查权重 |
 | TransOSS 全流程 | `07_transoss_pipeline.bat` | 数据转换 → 微调（自动）→ 推理 → 提交 |
 | TransOSS 本地验证 | `09_local_val_transoss.bat` | 备份/划分 20% 验证集/推理/评测 |
+| TransOSS 多checkpoint融合 | `10_transoss_fusion.bat` | 逐个权重批量验证 + 选优 RRF 融合 |
 
 ## 5. 核心功能
 
@@ -330,13 +333,48 @@ python transoss_inference.py \
 - 脚本会重新划分验证集并重写 `labels_train.csv`，首次运行前自动备份至 `labels_train.backup.csv`，请勿手动删除备份
 - 默认**无后处理**（直接余弦相似度检索）；如需重测后处理增益，在脚本第 3 步推理命令追加 `--tta --rerank --qe --cluster` 后重跑
 
-### 8.7 一键脚本
+### 8.7 多 checkpoint 选优与 RRF 融合
+
+**用途**：`07_transoss_pipeline.bat` 微调结束后，`Hoss-ReID/logs/competition_transoss/` 下会保留多个 `transformer_*.pth`（如 160/180/200）。逐个在本地验证集上推理评测后，选取综合得分最高的 top_k 个 checkpoint，用 RRF（Reciprocal Rank Fusion）融合它们的排名，通常比单一末轮权重更稳。
+
+**用法**：双击 `10_transoss_fusion.bat`（或直接执行）
+
+```bash
+.venv\Scripts\python.exe scripts\transoss_checkpoint_fusion.py ^
+    --task_json "..\赛题6-初赛\训练数据\local_val_task.json"
+```
+
+可选参数：`--top_k 3`（融合 checkpoint 数，默认 3）、`--preprocess`（融合时同步启用 SAR 预处理）、`--weight_dir` / `--out_dir` 自定义权重与输出目录。
+
+**流程**：glob 排序 `transformer_*.pth` → 逐个加载权重提取 query/gallery 特征（复用 `transoss_inference.extract_features`，按 query_type 过滤候选模态并排除 query 自身）→ 写 `pred_ckpt_<epoch>.json` → 子进程 `evaluate.py --submission` 评测（O2S/S2O/O2O 与综合）→ 按综合得分取 top_k → RRF 融合（`score = Σ 1/(60+rank)`，未进该 query 前 10 则计 0）→ 每个 query 在候选集按融合分降序取前 10，写 `pred_fusion.json` 并评测，最后打印对比汇总表。
+
+**预期**：若各 epoch 权重综合得分接近（通常 0.10~0.13），融合结果一般不低于最优单权重；本地验证用融合分数指导最终提交权重的选择。
+
+### 8.8 SAR 预处理增强（--preprocess）
+
+**用途**：SAR 图像天然带相干斑噪声、对比度低。`transoss_inference.py` 与 `transoss_checkpoint_fusion.py` 均支持 `--preprocess`，在 transform 前对 modality=1（SAR）图像做增强，可提升 SAR 分支特征质量。
+
+**流程**：转灰度 → `cv2.fastNlMeansDenoising(h=10)` 去斑 → `cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))` 对比度增强 → 默认复制为 3 通道 RGB；加 `--sar_colormap` 则 `cv2.applyColorMap(JET)` 伪彩转 RGB。`cv2` 缺失时打印警告并跳过增强，不影响原逻辑（默认关闭）。
+
+**用法**（本地验证/提交时追加）：
+
+```bash
+python transoss_inference.py --config_file configs/hoss_transoss_competition.yml ^
+    --weight logs/competition_transoss/transformer_200.pth ^
+    --task ../赛题6-初赛/训练数据/local_val_task.json ^
+    --out_prediction ../prediction_transoss_preprocess.json --preprocess
+```
+
+**预期**：SAR 去斑 + CLAHE 可缓解相干斑噪声对检索的干扰，O2S/S2O 方向可能有小幅增益；`--sar_colormap` 伪彩是否增益需在本地验证集上对比确认（建议先 `--preprocess` 测基线，再叠加 `--sar_colormap` 对比）。
+
+### 8.9 一键脚本
 
 | 脚本 | 作用 |
 |---|---|
 | `08_transoss_setup.bat` | 环境一键准备（克隆/依赖/数据/占位目录/配置/权重检查） |
 | `07_transoss_pipeline.bat` | 微调 + 推理全流程（自动） |
 | `09_local_val_transoss.bat` | 本地验证（备份/划分 20% 验证集/推理/评测） |
+| `10_transoss_fusion.bat` | 多 checkpoint 选优 + RRF 融合 |
 
 ## 9. 常见问题
 
