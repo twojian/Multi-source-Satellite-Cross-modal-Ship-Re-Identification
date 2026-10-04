@@ -376,6 +376,14 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 | `09_local_val_transoss.bat` | 本地验证（备份/划分 20% 验证集/推理/评测） |
 | `10_transoss_fusion.bat` | 多 checkpoint 选优 + RRF 融合 |
 
+### 8.10 优化节奏建议（零训练成本优先）
+
+优化遵循"先吃零成本推理端增益、不达标再重训"的节奏，避免盲目投入高成本训练：
+
+1. **零训练成本阶段（约半小时，预计 +4~8 分）**：先运行 `ship_reid_system\10_transoss_fusion.bat` 看多 checkpoint 选优与 RRF 融合的对比汇总表，再依次尝试 `--preprocess`（SAR 预处理）、TTA、rerank、QE 等推理端增强；**每步只保留带来正增益的项**，逐项叠加吃干净零训练成本的红利。
+2. **达标即提交**：本地验证分数达到目标后，直接对测试集执行推理并提交，不再追加改动。
+3. **不达标再重训（高成本兜底）**：仍不足时，才考虑需要重训的高成本项，如伪标签自训练（1 轮约 3.9 小时）、分辨率微调等；重训**可基于已有 `transformer_*.pth` 续训**，避免从头开始的时间开销。
+
 ## 9. 常见问题
 
 | 现象 | 排查 |
