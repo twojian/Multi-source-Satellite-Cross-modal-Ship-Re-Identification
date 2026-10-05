@@ -466,8 +466,8 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 
 ### 8.14 训练时间缩减策略
 
-1. **零训练初判优先**：先跑 `12_sdfnet_zero_shot.bat`——官方 HOSS 预训练权重直接本地验证（base / rerank+QE 两组合），不训练即可判断基线水平。
-2. **短 epoch 微调**：零训练分数不达标时，运行 `12_sdfnet_finetune.bat`，默认 **60 epoch**（`SDF_EPOCHS` 可配，如 100/120），以官方权重为起点续微调（官方默认 100 epoch，缩至 60 可显著控制训练时间）；微调完成后自动重跑 base / rerank+QE 本地验证。
+1. **零训练初判优先**：`13_sdfnet_plan.bat` 的 A1/A2 阶段用官方 HOSS 预训练权重直接本地验证（base / rerank+QE 两组合），不训练即可判断基线水平。
+2. **短 epoch 微调（仅一次）**：A 阶段后入口自动检查微调权重 `logs/SDF-Net-finetune/best.pth`；不存在且本机有 CUDA 时自动微调（默认 **60 epoch**，`SDF_EPOCHS` 可配），以官方权重为起点续微调（官方默认 100 epoch，缩至 60 可显著控制训练时间）；B1/B2/D1~D4 共享该权重，不重复训练。
 3. **决策节奏**：按 8.11 的原则逐项吃零成本增益；微调结果按本地验证 Δ（>0.005）判定是否保留，避免盲目加训。
 
 ### 8.15 rerank/QE 跨模态分组修复说明
@@ -481,7 +481,7 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 
 `scripts/sdfnet_inference.py` 采用同一分组逻辑，保证两模型后处理行为一致。
 
-**重测**：修复后需用现有 `local_val_task.json` 重测 rerankqe 组合（`11_transoss_ab.bat` 的 rerankqe 项 / `12_sdfnet_zero_shot.bat` 的 rerankqe 项），确认 **O2O 回到 0.94+** 且综合相对 base 有正增益，才在最终提交中启用 rerank/QE。
+**重测**：修复后需用现有 `local_val_task.json` 重测 rerankqe 组合（`11_transoss_ab.bat` 的 rerankqe 项 / `13_sdfnet_plan.bat` 的 A2、B2、C 组合），确认 **O2O 回到 0.94+** 且综合相对 base 有正增益，才在最终提交中启用 rerank/QE。
 
 ### 8.16 跨模型融合（SDF-Net × TransOSS）
 
@@ -491,7 +491,7 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 
 **流程**：SDF-Net 与 TransOSS 分别做 base 推理并 `--save_sim` 导出 `sim.pt + meta.json` → 融合脚本按 `image_path` 对齐 → 逐 query 按融合分降序取前 10 → 复用 `evaluate.py --submission` 评测，输出单模型与融合成绩对比报告。
 
-**一键**：`12_sdfnet_fusion.bat`（`METHOD=weighted|rrf`，`W_A` 为 SDF 权重）。融合需两模型均已就绪（SDF-Net 权重 + Hoss-ReID/transformer_200.pth）。
+**一键**：`13_sdfnet_plan.bat` 的 D1~D4 阶段自动执行（D1/D2/D3 = weighted，SDF 权重 0.5/0.6/0.7；D4 = RRF）。融合需两模型均已就绪（SDF-Net 微调权重 + Hoss-ReID/transformer_200.pth）。
 
 ### 8.17 合规披露清单（复现材料）
 
@@ -500,10 +500,42 @@ python transoss_inference.py --config_file configs/hoss_transoss_competition.yml
 | 预训练权重 | SDF-Net：HuggingFace `Chenfree233/SDF-Net` → `SDF-Net.pth`；TransOSS：HuggingFace `Alioth2000/TransOSS` → `vit_b512_pre.pth` |
 | 外部代码库 | SDF-Net：GitHub `cfrfree/SDF-Net`（commit `15cbb1a88742256c9a6754d4f29f956991366f93`）；TransOSS：GitHub `Alioth2000/Hoss-ReID` |
 | 依赖环境 | SDF-Net：Python 3.9+ / PyTorch 2.2.2+cu118 / timm==1.0.25 / yacs / opencv-python / Pillow（`.venv-sdfnet`）；TransOSS 与自研：见第 2 节（CUDA 12.4） |
-| 训练/推理命令 | 见 8.1~8.16 各节：`12_sdfnet_setup.bat` / `12_sdfnet_zero_shot.bat` / `12_sdfnet_finetune.bat` / `12_sdfnet_fusion.bat` / `07/08/09/10/11` 系列 bat |
+| 训练/推理命令 | 见 8.1~8.18 各节：`12_sdfnet_setup.bat`（SDF 环境准备）/ `13_sdfnet_plan.bat`（SDF × TransOSS 统一方案入口）/ `07/08/09/10/11` 系列 bat |
 | 随机种子 | SDF-Net：`config/defaults.py` `SOLVER.SEED=1949`（可由 `--opts SOLVER.SEED` 覆盖）；自研：`config/default.yaml` seed |
 | 数据与预处理 | 赛题官方训练数据；HOSS 转换仅目录重排 + 三通道灰度复制，**不改像素**；SAR 增强（`--preprocess`）属推理端可选处理 |
 | 赛题合规 | 所有提交格式校验复用 `evaluate.py`（O2S/S2O/O2O 分方向 + 综合得分）；候选模态严格匹配 query_type；不使用 AIS/航迹等未公开辅助信息 |
+
+### 8.18 统一方案入口（13_sdfnet_plan.bat）
+
+**定位**：把零散的 12 系列对比脚本收敛为单入口一键运行——按阶段自动执行 9 个组合的推理/微调/评测，并自动汇总对比文档，避免手动逐个跑脚本比对。
+
+**组合清单**（全部复用固定 `local_val_task.json`，不重新划分；微调仅执行一次，其余组合共享权重零训练推理）：
+
+| 组合 | 配置 | 说明 |
+|---|---|---|
+| A1 | SDF-Net 官方权重 base | 零训练基线 |
+| A2 | SDF-Net 官方权重 + rerankqe | 官方权重推理端增强 |
+| B1 | SDF-Net 微调后 base | 微调权重（默认 60 epoch，`SDF_EPOCHS` 可配） |
+| B2 | SDF-Net 微调后 + rerankqe | 微调权重推理端增强 |
+| C | TransOSS 现有权重 + rerankqe 重测 | 修复后分组逻辑重测 |
+| D1~D3 | SDF(微调后) × TransOSS weighted | SDF 权重 0.5 / 0.6 / 0.7 |
+| D4 | SDF(微调后) × TransOSS RRF | 倒数排名融合 |
+
+**用法**：
+
+```bat
+cd /d D:\Projects\Multi-source Satellite Cross-modal Ship Re-Identification\ship_reid_system
+13_sdfnet_plan.bat                    :: 默认：微调 60 epoch
+set SDF_EPOCHS=100 && 13_sdfnet_plan.bat  :: 自定义微调 epoch（SDF_IMS_PER_BATCH / SDF_WEIGHT / TRANS_WEIGHT 同理）
+```
+
+**自动产出**：
+- 对比文档：`experiments/exp_005_sdfnet_plan_compare.md`（完整结果表：各组合 O2S/S2O/O2O 的 R@1、mAP、综合分；每组合 Δ vs TransOSS baseline 0.4831/0.4881；正增益标记 >0.005；推荐提交组合与决策建议）
+- 中间产物：`ship_reid_system/sims/plan/`（各组合 `pred_*.json`、`sim.pt + meta.json`、`run.log` 执行日志）
+
+**失败/跳过策略**：微调权重不存在且无 CUDA 时 B/D 自动跳过并记录原因；TransOSS 侧环境缺失时 C/D 自动跳过；单个组合失败不影响其余组合继续执行；全部记录见 `sims/plan/run.log`。
+
+**收敛说明**：`12_sdfnet_setup.bat`（一次性环境准备）保留；原 `12_sdfnet_zero_shot / 12_sdfnet_finetune / 12_sdfnet_fusion` 三个脚本已整合进本入口。
 
 ## 9. 常见问题
 
